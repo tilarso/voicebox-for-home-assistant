@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+import json
 from typing import Any
 
 import asyncio
+
 import aiohttp
 
 
@@ -119,7 +122,17 @@ class VoiceboxApiClient:
         voice: str | None = None,
         output_path: str | None = None,
     ) -> dict[str, Any]:
-        """Request speech synthesis from Voicebox."""
+        """Request speech synthesis from Voicebox.
+
+        Compatibility order:
+        1) Legacy /api/synthesize
+        2) Newer /generate (some deployments)
+        3) Modern /speak + /generate/{id}/status + /audio/{id}
+
+        When output_path is provided and endpoint (3) is used, audio is downloaded
+        from Voicebox and written locally to output_path so callers have a stable
+        local file contract.
+        """
         payload: dict[str, Any] = {"text": text}
         if voice:
             payload["voice"] = voice
@@ -135,8 +148,41 @@ class VoiceboxApiClient:
             if legacy_err.status_code not in {404, 405}:
                 raise
 
-        # Fallback for newer Voicebox API schema.
-        return await self._request_json("POST", "/generate", json=payload)
+        # Next try /generate, which may exist on some newer deployments.
+        generation: dict[str, Any] | None = None
+        try:
+            generation = await self._request_json("POST", "/generate", json=payload)
+            if output_path:
+                generation_id = self._extract_generation_id(generation)
+                if generation_id:
+                    audio_bytes = await self._wait_for_audio(generation_id)
+                    self._write_output_file(output_path, audio_bytes)
+                    generation = dict(generation)
+                    generation.setdefault("output_path", output_path)
+            return generation
+        except VoiceboxApiAuthError:
+            raise
+        except VoiceboxApiResponseError as generate_err:
+            if generate_err.status_code not in {404, 405, 422}:
+                raise
+
+        # Modern Voicebox API: /speak returns generation metadata.
+        speak_payload: dict[str, Any] = {"text": text}
+        if voice:
+            # SpeakRequest supports `profile` (name or id).
+            speak_payload["profile"] = voice
+
+        generation = await self._request_json("POST", "/speak", json=speak_payload)
+
+        if output_path:
+            generation_id = self._extract_generation_id(generation)
+            if generation_id:
+                audio_bytes = await self._wait_for_audio(generation_id)
+                self._write_output_file(output_path, audio_bytes)
+                generation = dict(generation)
+                generation.setdefault("output_path", output_path)
+
+        return generation
 
     def _normalize_status_payload(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
         """Normalize endpoint-specific status payloads into integration shape."""
@@ -224,6 +270,140 @@ class VoiceboxApiClient:
             raise VoiceboxApiConnectionError(
                 f"Voicebox API request failed for {method} {url}: {err}"
             ) from err
+
+    async def _request_raw(self, method: str, path: str) -> tuple[int, dict[str, str], bytes]:
+        """Request a raw endpoint and return status, headers, and bytes body."""
+        session = await self._ensure_session()
+        url = f"{self._base_url}{path}"
+
+        try:
+            async with session.request(method, url, headers=self._headers()) as response:
+                body = await response.read()
+                headers = {k.lower(): v for k, v in response.headers.items()}
+
+                if response.status in {401, 403}:
+                    raise VoiceboxApiAuthError(
+                        message=f"Voicebox API auth failed for {method} {url} (status={response.status})",
+                        status_code=response.status,
+                        body=body.decode(errors="replace") if body else None,
+                    )
+
+                if response.status < 200 or response.status >= 300:
+                    detail: Any
+                    if body:
+                        try:
+                            detail = json.loads(body.decode())
+                        except Exception:
+                            detail = body.decode(errors="replace")
+                    else:
+                        detail = None
+                    raise VoiceboxApiResponseError(
+                        message=f"Voicebox API error for {method} {url} (status={response.status})",
+                        status_code=response.status,
+                        body=detail,
+                    )
+
+                return response.status, headers, body
+        except VoiceboxApiError:
+            raise
+        except (asyncio.TimeoutError, TimeoutError, aiohttp.ClientError) as err:
+            raise VoiceboxApiConnectionError(
+                f"Voicebox API request failed for {method} {url}: {err}"
+            ) from err
+
+    async def _wait_for_audio(self, generation_id: str) -> bytes:
+        """Poll generation status and fetch audio bytes.
+
+        Some Voicebox builds return status as JSON, others as event-stream text.
+        """
+        max_attempts = 30
+        delay_seconds = 0.5
+
+        for _ in range(max_attempts):
+            _, headers, raw_body = await self._request_raw("GET", f"/generate/{generation_id}/status")
+
+            status_payload = self._parse_status_payload(raw_body, headers.get("content-type", ""))
+            status = str(status_payload.get("status", "")).lower()
+
+            if status in {"completed", "done", "success"}:
+                _, _, audio = await self._request_raw("GET", f"/audio/{generation_id}")
+                if not audio:
+                    raise VoiceboxApiResponseError(
+                        message=f"Voicebox API returned empty audio for generation {generation_id}",
+                        status_code=200,
+                        body=None,
+                    )
+                return audio
+            if status in {"failed", "error", "cancelled"}:
+                raise VoiceboxApiResponseError(
+                    message=f"Voicebox generation {generation_id} failed with status '{status}'",
+                    status_code=502,
+                    body=status_payload,
+                )
+
+            await asyncio.sleep(delay_seconds)
+
+        raise VoiceboxApiResponseError(
+            message=f"Timed out waiting for Voicebox generation {generation_id}",
+            status_code=504,
+            body={"generation_id": generation_id},
+        )
+
+    def _extract_generation_id(self, payload: dict[str, Any]) -> str | None:
+        """Extract generation identifier from response payload."""
+        raw = payload.get("id") or payload.get("generation_id")
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+        return None
+
+    def _write_output_file(self, output_path: str, audio_bytes: bytes) -> None:
+        """Persist audio bytes to output path."""
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(audio_bytes)
+
+    def _parse_status_payload(self, raw_body: bytes, content_type: str) -> dict[str, Any]:
+        """Parse status payload from JSON or SSE bodies."""
+        text = raw_body.decode(errors="replace") if raw_body else ""
+
+        # Standard JSON response.
+        if "application/json" in content_type.lower():
+            try:
+                parsed = json.loads(text) if text else {}
+            except Exception as err:
+                raise VoiceboxApiResponseError(
+                    message="Voicebox status endpoint returned invalid JSON",
+                    status_code=200,
+                    body=text,
+                ) from err
+            if isinstance(parsed, dict):
+                return parsed
+            raise VoiceboxApiResponseError(
+                message="Voicebox status endpoint returned non-object JSON",
+                status_code=200,
+                body=parsed,
+            )
+
+        # Event-stream style: lines like `data: { ... }`.
+        for line in reversed(text.splitlines()):
+            stripped = line.strip()
+            if not stripped.startswith("data:"):
+                continue
+            candidate = stripped[5:].strip()
+            if not candidate:
+                continue
+            try:
+                parsed = json.loads(candidate)
+            except Exception:
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+
+        raise VoiceboxApiResponseError(
+            message="Voicebox status endpoint returned unsupported payload shape",
+            status_code=200,
+            body=text,
+        )
 
     async def _extract_response_body(self, response: aiohttp.ClientResponse) -> Any:
         """Parse JSON responses; return text body for non-JSON content."""

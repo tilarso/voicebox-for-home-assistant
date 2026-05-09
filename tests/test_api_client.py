@@ -234,6 +234,79 @@ async def test_synthesize_falls_back_to_generate_when_legacy_missing(aiohttp_cli
 
 
 @pytest.mark.asyncio
+async def test_synthesize_falls_back_to_speak_and_downloads_audio(aiohttp_client_mock, tmp_path):
+    out = tmp_path / "voicebox.wav"
+
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/synthesize",
+        status=405,
+        payload={"detail": "method not allowed"},
+    )
+    aiohttp_client_mock.post(
+        "http://voicebox.local/generate",
+        status=422,
+        payload={"detail": "missing profile_id"},
+    )
+    aiohttp_client_mock.post(
+        "http://voicebox.local/speak",
+        status=200,
+        payload={"id": "gen-1", "status": "generating"},
+    )
+    aiohttp_client_mock.get(
+        "http://voicebox.local/generate/gen-1/status",
+        status=200,
+        body='data: {"id":"gen-1","status":"completed"}\n\n',
+        content_type="text/event-stream",
+    )
+    aiohttp_client_mock.get(
+        "http://voicebox.local/audio/gen-1",
+        status=200,
+        body_bytes=b"RIFFMOCK",
+        content_type="audio/x-wav",
+    )
+
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
+
+    result = await client.async_synthesize("hello", voice="T.A.R.S", output_path=str(out))
+
+    assert result["id"] == "gen-1"
+    assert result["output_path"] == str(out)
+    assert out.read_bytes() == b"RIFFMOCK"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_raises_on_speak_failure_status(aiohttp_client_mock, tmp_path):
+    out = tmp_path / "voicebox.wav"
+
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/synthesize",
+        status=404,
+        payload={"detail": "not found"},
+    )
+    aiohttp_client_mock.post(
+        "http://voicebox.local/generate",
+        status=422,
+        payload={"detail": "missing profile_id"},
+    )
+    aiohttp_client_mock.post(
+        "http://voicebox.local/speak",
+        status=200,
+        payload={"id": "gen-fail", "status": "generating"},
+    )
+    aiohttp_client_mock.get(
+        "http://voicebox.local/generate/gen-fail/status",
+        status=200,
+        body='data: {"id":"gen-fail","status":"failed","error":"boom"}\n\n',
+        content_type="text/event-stream",
+    )
+
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
+
+    with pytest.raises(VoiceboxApiResponseError, match="failed"):
+        await client.async_synthesize("hello", output_path=str(out))
+
+
+@pytest.mark.asyncio
 async def test_bearer_token_is_attached_when_api_key_present(monkeypatch, aiohttp_client_mock):
     captured_headers: dict[str, str] = {}
     original_request = aiohttp_client_mock.session.request

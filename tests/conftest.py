@@ -227,14 +227,17 @@ class _MockResponse:
         payload: Any = None,
         text_body: str = "",
         content_type: str | None = None,
+        body_bytes: bytes | None = None,
     ) -> None:
         self.status = status
         self._payload = payload
         self._text_body = text_body
+        self._body_bytes = body_bytes
         if content_type is not None:
             self.content_type = content_type
         else:
             self.content_type = "application/json" if payload is not None else "text/plain"
+        self.headers = {"Content-Type": self.content_type}
 
     async def json(self, content_type: Any = None) -> Any:
         if self._payload is None:
@@ -246,7 +249,18 @@ class _MockResponse:
             import json
 
             return json.dumps(self._payload)
+        if self._body_bytes is not None:
+            return self._body_bytes.decode(errors="replace")
         return self._text_body
+
+    async def read(self) -> bytes:
+        if self._body_bytes is not None:
+            return self._body_bytes
+        if self._payload is not None:
+            import json
+
+            return json.dumps(self._payload).encode()
+        return self._text_body.encode()
 
 
 class _ResponseContext:
@@ -284,12 +298,14 @@ class FakeAiohttpClientMock:
         payload: Any = None,
         body: str = "",
         content_type: str | None = None,
+        body_bytes: bytes | None = None,
     ) -> None:
         self._routes[("GET", url)] = _MockResponse(
             status=status,
             payload=payload,
             text_body=body,
             content_type=content_type,
+            body_bytes=body_bytes,
         )
 
     def post(
@@ -300,12 +316,14 @@ class FakeAiohttpClientMock:
         payload: Any = None,
         body: str = "",
         content_type: str | None = None,
+        body_bytes: bytes | None = None,
     ) -> None:
         self._routes[("POST", url)] = _MockResponse(
             status=status,
             payload=payload,
             text_body=body,
             content_type=content_type,
+            body_bytes=body_bytes,
         )
 
     def _request(self, method: str, url: str, headers: dict[str, str] | None = None, json: Any = None):
