@@ -138,10 +138,18 @@ data:
 - Check firewall/routing between Home Assistant and Voicebox.
 - If Voicebox is HTTPS-only, ensure `use_ssl` is enabled.
 
+### Integration setup fails with `invalid_auth`
+
+- The server was reached but rejected credentials (`401/403`).
+- Re-check the configured `api_key`.
+- Verify the token format expected by your Voicebox deployment.
+
 ### Setup fails with `invalid_response`
 
-- Verify the server at the target endpoint is actually Voicebox.
-- Check the API behavior at `GET /api/status`. The integration expects a JSON response.
+- The server was reachable, but returned an API shape this integration could not use.
+- Common cause: pointing to a Voicebox web UI route/proxy instead of the API server.
+- The integration now probes legacy and newer status endpoints (`/api/status`, `/health`, `/models/status`).
+- Verify the target returns JSON for one of those endpoints and not HTML.
 
 ### Service error when multiple instances are configured
 

@@ -64,8 +64,36 @@ class VoiceboxApiClient:
             await self._session.close()
 
     async def async_status(self) -> dict[str, Any]:
-        """Fetch current Voicebox status."""
-        return await self._request_json("GET", "/api/status")
+        """Fetch current Voicebox status.
+
+        Supports both legacy and newer Voicebox API layouts.
+        """
+        attempts: list[str] = []
+
+        for path in ("/api/status", "/health", "/models/status"):
+            try:
+                payload = await self._request_json("GET", path)
+            except VoiceboxApiAuthError:
+                # Authentication errors are definitive; do not hide by falling back.
+                raise
+            except VoiceboxApiResponseError as err:
+                attempts.append(f"{path}: status={err.status_code}")
+                continue
+
+            normalized = self._normalize_status_payload(path, payload)
+            if normalized is not None:
+                return normalized
+
+            attempts.append(f"{path}: unsupported payload shape")
+
+        raise VoiceboxApiResponseError(
+            message=(
+                "Voicebox API status endpoint validation failed; tried "
+                f"{', '.join(['/api/status', '/health', '/models/status'])}."
+            ),
+            status_code=0,
+            body={"attempts": attempts},
+        )
 
     async def async_enable(self) -> dict[str, Any]:
         """Enable Voicebox."""
@@ -98,7 +126,48 @@ class VoiceboxApiClient:
         if output_path:
             payload["output_path"] = output_path
 
-        return await self._request_json("POST", "/api/synthesize", json=payload)
+        # Prefer legacy endpoint first for backward compatibility.
+        try:
+            return await self._request_json("POST", "/api/synthesize", json=payload)
+        except VoiceboxApiAuthError:
+            raise
+        except VoiceboxApiResponseError as legacy_err:
+            if legacy_err.status_code not in {404, 405}:
+                raise
+
+        # Fallback for newer Voicebox API schema.
+        return await self._request_json("POST", "/generate", json=payload)
+
+    def _normalize_status_payload(self, path: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Normalize endpoint-specific status payloads into integration shape."""
+        if path == "/api/status":
+            status = payload.get("status")
+            if isinstance(status, str):
+                normalized = dict(payload)
+                normalized.setdefault("enabled", status.lower() in {"running", "enabled", "on"})
+                return normalized
+            return None
+
+        if path == "/health":
+            health_status = payload.get("status")
+            if isinstance(health_status, str):
+                enabled = health_status.lower() in {"healthy", "ok", "running", "enabled", "on"}
+                normalized = dict(payload)
+                normalized["status"] = "running" if enabled else health_status
+                normalized["enabled"] = enabled
+                return normalized
+            return None
+
+        if path == "/models/status":
+            model_loaded = payload.get("model_loaded")
+            if isinstance(model_loaded, bool):
+                normalized = dict(payload)
+                normalized["status"] = "running" if model_loaded else "idle"
+                normalized["enabled"] = model_loaded
+                return normalized
+            return None
+
+        return None
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:

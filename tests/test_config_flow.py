@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 
 from custom_components.voicebox import config_flow
-from custom_components.voicebox.api_client import VoiceboxApiConnectionError
+from custom_components.voicebox.api_client import (
+    VoiceboxApiAuthError,
+    VoiceboxApiConnectionError,
+    VoiceboxApiResponseError,
+)
 
 
 class _FakeHass:
@@ -129,9 +133,44 @@ async def test_validate_input_raises_cannot_connect(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_validate_input_raises_invalid_auth(monkeypatch):
+    class _AuthFailSession:
+        closed = False
+
+        def request(self, method, url, headers=None, json=None):
+            raise VoiceboxApiAuthError(
+                message="unauthorized",
+                status_code=401,
+                body={"detail": "bad key"},
+            )
+
+    monkeypatch.setattr(
+        config_flow,
+        "async_get_clientsession",
+        lambda hass: _AuthFailSession(),
+    )
+
+    with pytest.raises(config_flow.InvalidAuth):
+        await config_flow._async_validate_input(
+            _FakeHass(),
+            {"host": "127.0.0.1", "port": 8000},
+        )
+
+
+@pytest.mark.asyncio
 async def test_validate_input_raises_invalid_response(monkeypatch, aiohttp_client_mock):
     aiohttp_client_mock.get(
         "http://127.0.0.1:8000/api/status",
+        status=500,
+        payload={"detail": "bad"},
+    )
+    aiohttp_client_mock.get(
+        "http://127.0.0.1:8000/health",
+        status=500,
+        payload={"detail": "bad"},
+    )
+    aiohttp_client_mock.get(
+        "http://127.0.0.1:8000/models/status",
         status=500,
         payload={"detail": "bad"},
     )
@@ -140,6 +179,31 @@ async def test_validate_input_raises_invalid_response(monkeypatch, aiohttp_clien
         config_flow,
         "async_get_clientsession",
         lambda hass: aiohttp_client_mock.session,
+    )
+
+    with pytest.raises(config_flow.InvalidResponse):
+        await config_flow._async_validate_input(
+            _FakeHass(),
+            {"host": "127.0.0.1", "port": 8000},
+        )
+
+
+@pytest.mark.asyncio
+async def test_validate_input_raises_invalid_response_for_incompatible_payload(monkeypatch):
+    class _IncompatibleSession:
+        closed = False
+
+        def request(self, method, url, headers=None, json=None):
+            raise VoiceboxApiResponseError(
+                message="bad shape",
+                status_code=200,
+                body={"status": 123},
+            )
+
+    monkeypatch.setattr(
+        config_flow,
+        "async_get_clientsession",
+        lambda hass: _IncompatibleSession(),
     )
 
     with pytest.raises(config_flow.InvalidResponse):
@@ -264,6 +328,22 @@ async def test_user_step_sets_cannot_connect_error(monkeypatch):
 
     assert result["type"] == "form"
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+async def test_user_step_sets_invalid_auth_error(monkeypatch):
+    flow = config_flow.VoiceboxConfigFlow()
+    flow.hass = _FakeHass()
+
+    async def _fail_validate(hass, user_input):
+        raise config_flow.InvalidAuth()
+
+    monkeypatch.setattr(config_flow, "_async_validate_input", _fail_validate)
+
+    result = await flow.async_step_user({"host": "voicebox.local", "port": 9999})
+
+    assert result["type"] == "form"
+    assert result["errors"] == {"base": "invalid_auth"}
 
 
 @pytest.mark.asyncio

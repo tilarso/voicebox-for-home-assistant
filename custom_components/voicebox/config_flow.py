@@ -10,7 +10,12 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api_client import VoiceboxApiClient, VoiceboxApiConnectionError, VoiceboxApiResponseError
+from .api_client import (
+    VoiceboxApiAuthError,
+    VoiceboxApiClient,
+    VoiceboxApiConnectionError,
+    VoiceboxApiResponseError,
+)
 from .const import (
     CONF_API_KEY,
     CONF_HOST,
@@ -41,6 +46,8 @@ class VoiceboxConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_HOST] = "invalid_host"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
             except InvalidResponse:
                 errors["base"] = "invalid_response"
             except Exception:  # pragma: no cover
@@ -170,12 +177,18 @@ async def _async_validate_input(hass, data: dict[str, Any]) -> None:
         await client.async_status()
     except VoiceboxApiConnectionError as err:
         raise CannotConnect from err
+    except VoiceboxApiAuthError as err:
+        raise InvalidAuth from err
     except VoiceboxApiResponseError as err:
         raise InvalidResponse from err
 
 
 class CannotConnect(Exception):
     """Error to indicate we cannot connect."""
+
+
+class InvalidAuth(Exception):
+    """Error to indicate API authentication failed."""
 
 
 class InvalidResponse(Exception):

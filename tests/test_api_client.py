@@ -26,7 +26,8 @@ async def test_async_status_returns_json_dict(aiohttp_client_mock):
 
     result = await client.async_status()
 
-    assert result == {"status": "running"}
+    assert result["status"] == "running"
+    assert result["enabled"] is True
 
 
 @pytest.mark.asyncio
@@ -147,11 +148,61 @@ async def test_timeout_error_raises_connection_error():
 
 
 @pytest.mark.asyncio
+async def test_status_falls_back_to_health_for_newer_api(aiohttp_client_mock):
+    aiohttp_client_mock.get(
+        "http://voicebox.local/api/status",
+        status=200,
+        body="<!doctype html><html>Not API</html>",
+        content_type="text/html",
+    )
+    aiohttp_client_mock.get(
+        "http://voicebox.local/health",
+        status=200,
+        payload={"status": "healthy", "model_loaded": False},
+    )
+
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
+
+    result = await client.async_status()
+
+    assert result["status"] == "running"
+    assert result["enabled"] is True
+
+
+@pytest.mark.asyncio
+async def test_status_falls_back_to_models_status_when_health_missing(aiohttp_client_mock):
+    aiohttp_client_mock.get("http://voicebox.local/api/status", status=404, payload={"detail": "not found"})
+    aiohttp_client_mock.get("http://voicebox.local/health", status=404, payload={"detail": "not found"})
+    aiohttp_client_mock.get(
+        "http://voicebox.local/models/status",
+        status=200,
+        payload={"model_loaded": False, "model_name": None},
+    )
+
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
+
+    result = await client.async_status()
+
+    assert result["status"] == "idle"
+    assert result["enabled"] is False
+
+
+@pytest.mark.asyncio
 async def test_non_dict_json_response_raises_response_error(aiohttp_client_mock):
     aiohttp_client_mock.get(
         "http://voicebox.local/api/status",
         status=200,
         payload=["not", "a", "dict"],
+    )
+    aiohttp_client_mock.get(
+        "http://voicebox.local/health",
+        status=404,
+        payload={"detail": "not found"},
+    )
+    aiohttp_client_mock.get(
+        "http://voicebox.local/models/status",
+        status=404,
+        payload={"detail": "not found"},
     )
 
     client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
@@ -159,7 +210,27 @@ async def test_non_dict_json_response_raises_response_error(aiohttp_client_mock)
     with pytest.raises(VoiceboxApiResponseError) as exc:
         await client.async_status()
 
-    assert "non-object JSON" in str(exc.value)
+    assert "status endpoint validation failed" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_synthesize_falls_back_to_generate_when_legacy_missing(aiohttp_client_mock):
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/synthesize",
+        status=404,
+        payload={"detail": "not found"},
+    )
+    aiohttp_client_mock.post(
+        "http://voicebox.local/generate",
+        status=200,
+        payload={"generation_id": "abc123", "status": "queued"},
+    )
+
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
+
+    result = await client.async_synthesize("hello")
+
+    assert result["generation_id"] == "abc123"
 
 
 @pytest.mark.asyncio

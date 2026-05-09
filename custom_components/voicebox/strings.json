@@ -13,8 +13,9 @@
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect",
-      "invalid_response": "Unexpected API response",
+      "cannot_connect": "Could not connect to Voicebox. Verify host/port, network reachability, and HTTPS toggle.",
+      "invalid_auth": "Voicebox authentication failed (401/403). Check API key.",
+      "invalid_response": "Connected, but Voicebox API response was incompatible. Ensure this is a Voicebox API server and not the web UI endpoint.",
       "invalid_host": "Host is invalid or not allowed",
       "unknown": "Unexpected error"
     },
