@@ -121,7 +121,6 @@ def _validate_host(host: str) -> None:
         "169.254.",
         "127.",
         "0.",
-        "::",
     )
     if lowered.startswith(blocked_prefixes):
         raise InvalidHost
@@ -154,9 +153,9 @@ def _validate_host(host: str) -> None:
 
 async def _async_validate_input(hass, data: dict[str, Any]) -> None:
     """Validate user input allows us to connect."""
-    host = str(data[CONF_HOST]).strip()
-    port = int(data[CONF_PORT])
-    use_ssl = bool(data.get(CONF_USE_SSL, DEFAULT_USE_SSL))
+    host = data[CONF_HOST]
+    port = data[CONF_PORT]
+    use_ssl = data.get(CONF_USE_SSL, DEFAULT_USE_SSL)
     api_key = data.get(CONF_API_KEY)
 
     scheme = "https" if use_ssl else "http"

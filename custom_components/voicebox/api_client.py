@@ -157,7 +157,7 @@ class VoiceboxApiClient:
             ) from err
 
     async def _extract_response_body(self, response: aiohttp.ClientResponse) -> Any:
-        """Try to parse JSON body; return text fallback if parsing fails."""
+        """Parse JSON responses; return text body for non-JSON content."""
         if response.content_type == "application/json":
             return await response.json(content_type=None)
 
@@ -165,7 +165,4 @@ class VoiceboxApiClient:
         if not text_body:
             return {}
 
-        try:
-            return await response.json(content_type=None)
-        except (aiohttp.ContentTypeError, ValueError):
-            return text_body
+        return text_body

@@ -105,6 +105,24 @@ async def test_non_2xx_raises_voicebox_api_response_error(aiohttp_client_mock):
 
 
 @pytest.mark.asyncio
+async def test_non_json_content_type_returns_text_body_in_response_error(aiohttp_client_mock):
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/restart",
+        status=500,
+        body="upstream exploded",
+        content_type="text/plain",
+    )
+
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
+
+    with pytest.raises(VoiceboxApiResponseError) as exc:
+        await client.async_restart()
+
+    assert exc.value.status_code == 500
+    assert exc.value.body == "upstream exploded"
+
+
+@pytest.mark.asyncio
 async def test_network_error_raises_connection_error():
     def _raise(*args, **kwargs):
         raise aiohttp.ClientError("boom")
