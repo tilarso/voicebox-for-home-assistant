@@ -12,6 +12,7 @@
     },
     "error": {
       "cannot_connect": "Failed to connect",
+      "invalid_response": "Unexpected API response",
       "unknown": "Unexpected error"
     },
     "abort": {
