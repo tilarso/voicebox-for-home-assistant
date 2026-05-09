@@ -216,6 +216,100 @@ async def test_synthesize_rejects_output_path_outside_allowlist():
 
 
 @pytest.mark.asyncio
+async def test_synthesize_rejects_relative_output_path():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-1")
+    await async_setup_entry(hass, entry)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    with pytest.raises(Exception, match="must be absolute"):
+        await handler(_FakeServiceCall({ATTR_TEXT: "hello", ATTR_OUTPUT_PATH: "voicebox.wav"}))
+
+
+@pytest.mark.asyncio
+async def test_synthesize_rejects_traversal_output_path():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-1")
+    await async_setup_entry(hass, entry)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    with pytest.raises(Exception, match="cannot contain path traversal"):
+        await handler(
+            _FakeServiceCall(
+                {ATTR_TEXT: "hello", ATTR_OUTPUT_PATH: "/config/media/voicebox/../escape.wav"}
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_synthesize_rejects_null_byte_output_path():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-1")
+    await async_setup_entry(hass, entry)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    with pytest.raises(Exception, match="invalid null byte"):
+        await handler(
+            _FakeServiceCall({ATTR_TEXT: "hello", ATTR_OUTPUT_PATH: "/config/media/voicebox/a\x00.wav"})
+        )
+
+
+@pytest.mark.asyncio
+async def test_synthesize_accepts_base_dir_output_path():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-1")
+    await async_setup_entry(hass, entry)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    await handler(
+        _FakeServiceCall({ATTR_TEXT: "hello", ATTR_OUTPUT_PATH: "/config/media/voicebox"})
+    )
+
+    entry.runtime_data.client.async_synthesize.assert_awaited_once_with(
+        text="hello",
+        voice=None,
+        output_path="/config/media/voicebox",
+    )
+
+
+@pytest.mark.asyncio
+async def test_synthesize_accepts_nested_output_path():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-1")
+    await async_setup_entry(hass, entry)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    await handler(
+        _FakeServiceCall(
+            {ATTR_TEXT: "hello", ATTR_OUTPUT_PATH: "/config/media/voicebox/subdir/audio.wav"}
+        )
+    )
+
+    entry.runtime_data.client.async_synthesize.assert_awaited_once_with(
+        text="hello",
+        voice=None,
+        output_path="/config/media/voicebox/subdir/audio.wav",
+    )
+
+
+@pytest.mark.asyncio
+async def test_setup_uses_https_base_url_when_use_ssl_enabled():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-https", host="voicebox.local", port=8443)
+    entry.data["use_ssl"] = True
+
+    ok = await async_setup_entry(hass, entry)
+
+    assert ok is True
+    assert entry.runtime_data.client.base_url == "https://voicebox.local:8443"
+
+
+@pytest.mark.asyncio
 async def test_unload_removes_service_when_last_entry():
     hass = _FakeHass()
     entry = _FakeEntry("entry-1")
