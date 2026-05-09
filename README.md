@@ -11,10 +11,6 @@ This integration adds:
 - one enabled/disabled switch per configured server
 - a `voicebox.synthesize` service for text-to-speech requests
 
-Visual references from the upstream Voicebox project:
-- https://raw.githubusercontent.com/jamiepine/voicebox/main/.github/assets/icon-dark.webp
-- https://raw.githubusercontent.com/jamiepine/voicebox/main/landing/public/assets/app-screenshot-1.webp
-
 ## What this project is (and is not)
 
 This repository contains a Home Assistant integration (`custom_components/voicebox`) that talks to an existing Voicebox API endpoint.
