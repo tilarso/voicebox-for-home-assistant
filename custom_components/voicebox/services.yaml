@@ -1,0 +1,22 @@
+synthesize:
+  name: Synthesize speech
+  description: Send text to Voicebox for speech synthesis.
+  fields:
+    text:
+      name: Text
+      description: Text content to synthesize.
+      required: true
+      selector:
+        text:
+    voice:
+      name: Voice
+      description: Optional voice identifier to use for synthesis.
+      required: false
+      selector:
+        text:
+    output_path:
+      name: Output path
+      description: Optional file path where Voicebox should write audio output.
+      required: false
+      selector:
+        text:
