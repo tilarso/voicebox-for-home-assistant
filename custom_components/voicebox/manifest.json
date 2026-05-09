@@ -1,0 +1,13 @@
+{
+  "domain": "voicebox",
+  "name": "Voicebox",
+  "version": "0.1.0",
+  "documentation": "https://github.com/tilarso/home-assistant-voicebox-plugin",
+  "issue_tracker": "https://github.com/tilarso/home-assistant-voicebox-plugin/issues",
+  "codeowners": [
+    "@tilarso"
+  ],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "requirements": []
+}
