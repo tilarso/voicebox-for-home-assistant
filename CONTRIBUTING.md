@@ -8,7 +8,7 @@ This project is a Home Assistant custom integration that connects to an existing
 
 - Read the project overview in [README.md](README.md).
 - Read the security policy in [SECURITY.md](SECURITY.md).
-- Search existing issues before opening a new one: https://github.com/tilarso/home-assistant-voicebox-plugin/issues
+- Search existing issues before opening a new one: https://github.com/tilarso/voicebox-for-home-assistant/issues
 
 ## Ways to contribute
 
@@ -38,7 +38,7 @@ Example branch naming:
 This repository does not currently include a pinned lockfile/requirements file. Use a local virtual environment and install the packages used by this codebase/tests.
 
 ```bash
-git clone https://github.com/tilarso/home-assistant-voicebox-plugin.git
+git clone https://github.com/tilarso/voicebox-for-home-assistant.git
 cd home-assistant-voicebox-plugin
 
 python3 -m venv .venv
@@ -111,7 +111,7 @@ Do not open public issues for vulnerabilities.
 
 Report security issues privately using the process in [SECURITY.md](SECURITY.md), preferably via GitHub Security Advisories:
 
-- https://github.com/tilarso/home-assistant-voicebox-plugin/security/advisories
+- https://github.com/tilarso/voicebox-for-home-assistant/security/advisories
 
 Vulnerability reports about the upstream Voicebox server should be reported to:
 

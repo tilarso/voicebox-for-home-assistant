@@ -2,8 +2,8 @@
   "domain": "voicebox",
   "name": "Voicebox",
   "version": "0.1.0",
-  "documentation": "https://github.com/tilarso/home-assistant-voicebox-plugin",
-  "issue_tracker": "https://github.com/tilarso/home-assistant-voicebox-plugin/issues",
+  "documentation": "https://github.com/tilarso/voicebox-for-home-assistant",
+  "issue_tracker": "https://github.com/tilarso/voicebox-for-home-assistant/issues",
   "codeowners": [
     "@tilarso"
   ],

@@ -4,13 +4,11 @@
 
 [![Add to Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tilarso&repository=home-assistant-voicebox-plugin&category=integration)
 
-Home Assistant custom integration for connecting to a local Voicebox API server.
-
 This integration adds:
+- a `voicebox.synthesize` service for text-to-speech requests
 - one config flow per Voicebox server
 - one status sensor per configured server
 - one enabled/disabled switch per configured server
-- a `voicebox.synthesize` service for text-to-speech requests
 
 ## What this project is (and is not)
 
@@ -36,13 +34,12 @@ Notes:
 1. Open HACS -> Integrations.
 2. Open the menu (3 dots) -> Custom repositories.
 3. Add repository URL:
-   - `https://github.com/tilarso/home-assistant-voicebox-plugin`
+   - `https://github.com/tilarso/voicebox-for-home-assistant`
    - Category: `Integration`
 4. Search for `Voicebox` in HACS and install it.
 5. Restart Home Assistant.
 
-You can also use the button:
-- [Add to Home Assistant](https://my.home-assistant.io/redirect/hacs_repository/?owner=tilarso&repository=home-assistant-voicebox-plugin&category=integration)
+You can also use the "Add to Home Assistant" button above to add the custom repository.
 
 ### Option B: Manual install
 
@@ -113,27 +110,24 @@ data:
   text: "Route this to a specific Voicebox server"
 ```
 
-## Security notes
+## Security
 
 ### SSL / HTTPS behavior (`use_ssl`)
 
-Important: `use_ssl` defaults to `false` (`DEFAULT_USE_SSL = False`), so new configurations use plain HTTP unless you enable HTTPS.
+**Important:** `use_ssl` defaults to `false` (`DEFAULT_USE_SSL = False`), so new configurations use plain HTTP unless you explicitly enable HTTPS during setup.
 
-Risk of default HTTP:
-- Traffic (including text and optional bearer token) is unencrypted on the network path.
-- On untrusted/shared networks this can expose sensitive content or credentials.
+**Risk of default HTTP:**
+- Traffic, including any `api_key`, is sent unencrypted.
+- On untrusted networks (e.g., public Wi-Fi, some corporate networks), this can expose sensitive synthesized text or API credentials.
 
-Recommended usage:
-- Keep Voicebox and Home Assistant on a trusted local network segment if using HTTP.
-- Prefer enabling `use_ssl` when traffic crosses VLANs, Wi-Fi you do not fully trust, VPN exits, or any external/untrusted path.
-- If you use API keys, treat them as secrets and rotate them if exposure is suspected.
+**Recommendations:**
+- **Enable `use_ssl`** if your Voicebox server supports HTTPS, especially if traffic leaves your local machine.
+- If using HTTP, ensure both Home Assistant and the Voicebox server are on a trusted, isolated network segment.
+- Treat `api_key` values as secrets. Rotate them if you suspect they have been exposed.
 
 ### Output path safety
 
-`voicebox.synthesize` enforces `output_path` to remain under:
-- `/config/media/voicebox`
-
-The integration rejects traversal patterns, non-absolute paths, and null bytes.
+`voicebox.synthesize` enforces that any `output_path` must be inside the `/config/media/voicebox` directory. The integration rejects directory traversal patterns (`..`), non-absolute paths, and null bytes to prevent writing files to unintended locations.
 
 ## Troubleshooting
 
@@ -142,27 +136,27 @@ The integration rejects traversal patterns, non-absolute paths, and null bytes.
 - Confirm Voicebox is running.
 - Confirm Home Assistant can reach `host:port`.
 - Check firewall/routing between Home Assistant and Voicebox.
-- If Voicebox is HTTPS-only, enable `use_ssl`.
+- If Voicebox is HTTPS-only, ensure `use_ssl` is enabled.
 
 ### Setup fails with `invalid_response`
 
 - Verify the server at the target endpoint is actually Voicebox.
-- Check API behavior at `GET /api/status`.
+- Check the API behavior at `GET /api/status`. The integration expects a JSON response.
 
 ### Service error when multiple instances are configured
 
-If you have more than one Voicebox config entry, include `entry_id` in `voicebox.synthesize` calls.
+If you have more than one Voicebox config entry, you must include the correct `entry_id` in all `voicebox.synthesize` service calls to target the correct instance.
 
 ### `output_path` validation errors
 
 Make sure `output_path`:
-- is absolute
+- is absolute (starts with `/`)
 - is inside `/config/media/voicebox`
 - does not include `..`
 
 ### Auth errors (401/403)
 
-- Recheck the configured `api_key`.
+- Re-check the configured `api_key`.
 - Verify the token format expected by your Voicebox server.
 
 ## License
