@@ -23,4 +23,4 @@ ATTR_OUTPUT_PATH = "output_path"
 
 COORDINATOR_UPDATE_INTERVAL = timedelta(seconds=30)
 
-PLATFORMS: list[str] = ["sensor", "switch"]
+PLATFORMS: list[str] = ["sensor", "switch", "tts"]

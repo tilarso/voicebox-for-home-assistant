@@ -33,9 +33,13 @@ def _install_homeassistant_stubs() -> None:
 
     exceptions_mod = types.ModuleType("homeassistant.exceptions")
 
-    class ServiceValidationError(Exception):
+    class HomeAssistantError(Exception):
         pass
 
+    class ServiceValidationError(HomeAssistantError):
+        pass
+
+    exceptions_mod.HomeAssistantError = HomeAssistantError
     exceptions_mod.ServiceValidationError = ServiceValidationError
 
     config_entries_mod = types.ModuleType("homeassistant.config_entries")
@@ -151,6 +155,13 @@ def _install_homeassistant_stubs() -> None:
 
     components_switch_mod.SwitchEntity = SwitchEntity
 
+    components_tts_mod = types.ModuleType("homeassistant.components.tts")
+
+    class TextToSpeechEntity:
+        pass
+
+    components_tts_mod.TextToSpeechEntity = TextToSpeechEntity
+
     vol_mod = types.ModuleType("voluptuous")
 
     def _identity(*args, **kwargs):
@@ -202,6 +213,7 @@ def _install_homeassistant_stubs() -> None:
     sys.modules["homeassistant.components"] = components_pkg
     sys.modules["homeassistant.components.sensor"] = components_sensor_mod
     sys.modules["homeassistant.components.switch"] = components_switch_mod
+    sys.modules["homeassistant.components.tts"] = components_tts_mod
     sys.modules["voluptuous"] = vol_mod
 
 
