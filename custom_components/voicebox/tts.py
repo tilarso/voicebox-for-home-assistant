@@ -36,7 +36,7 @@ class VoiceboxTtsProvider(TextToSpeechEntity):
     """Voicebox-backed native TTS provider."""
 
     _attr_has_entity_name = True
-    _attr_name = "tts"
+    _attr_name = "voicebox"
 
     def __init__(self, coordinator: VoiceboxCoordinator, entry: ConfigEntry) -> None:
         self._coordinator = coordinator
