@@ -1,14 +1,13 @@
 {
   "domain": "voicebox",
   "name": "Voicebox",
-  "version": "0.1.0",
-  "documentation": "https://github.com/tilarso/voicebox-for-home-assistant",
-  "issue_tracker": "https://github.com/tilarso/voicebox-for-home-assistant/issues",
   "codeowners": [
     "@tilarso"
   ],
   "config_flow": true,
+  "documentation": "https://github.com/tilarso/voicebox-for-home-assistant",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/tilarso/voicebox-for-home-assistant/issues",
   "requirements": [],
-  "services": "services.yaml"
+  "version": "0.1.0"
 }
