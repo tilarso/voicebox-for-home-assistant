@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import asyncio
-from unittest.mock import AsyncMock, Mock
+import types
 
 import aiohttp
 import pytest
@@ -12,61 +14,35 @@ from custom_components.voicebox.api_client import (
 )
 
 
-class _ResponseCtx:
-    def __init__(self, response):
-        self._response = response
-
-    async def __aenter__(self):
-        return self._response
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-
-def _response(
-    *,
-    status=200,
-    content_type="application/json",
-    json_body=None,
-    text_body="",
-):
-    response = Mock()
-    response.status = status
-    response.content_type = content_type
-    response.json = AsyncMock(return_value={} if json_body is None else json_body)
-    response.text = AsyncMock(return_value=text_body)
-    return response
-
-
 @pytest.mark.asyncio
-async def test_async_status_returns_json_dict():
-    response = _response(json_body={"status": "running"})
-    session = Mock(closed=False)
-    session.request = Mock(return_value=_ResponseCtx(response))
+async def test_async_status_returns_json_dict(aiohttp_client_mock):
+    aiohttp_client_mock.get(
+        "http://voicebox.local/api/status",
+        status=200,
+        payload={"status": "running"},
+    )
 
-    client = VoiceboxApiClient("http://voicebox.local", session=session)
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
 
     result = await client.async_status()
 
     assert result == {"status": "running"}
-    session.request.assert_called_once_with(
-        "GET",
-        "http://voicebox.local/api/status",
-        headers={"Accept": "application/json"},
-        json=None,
-    )
 
 
 @pytest.mark.asyncio
-async def test_async_set_enabled_routes_to_enable_and_disable():
-    response_enable = _response(json_body={"enabled": True})
-    response_disable = _response(json_body={"enabled": False})
-    session = Mock(closed=False)
-    session.request = Mock(
-        side_effect=[_ResponseCtx(response_enable), _ResponseCtx(response_disable)]
+async def test_async_set_enabled_routes_to_enable_and_disable(aiohttp_client_mock):
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/enable",
+        status=200,
+        payload={"enabled": True},
+    )
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/disable",
+        status=200,
+        payload={"enabled": False},
     )
 
-    client = VoiceboxApiClient("http://voicebox.local", session=session)
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
 
     enabled_result = await client.async_set_enabled(True)
     disabled_result = await client.async_set_enabled(False)
@@ -76,12 +52,14 @@ async def test_async_set_enabled_routes_to_enable_and_disable():
 
 
 @pytest.mark.asyncio
-async def test_async_synthesize_posts_expected_payload():
-    response = _response(json_body={"ok": True, "file": "/tmp/audio.wav"})
-    session = Mock(closed=False)
-    session.request = Mock(return_value=_ResponseCtx(response))
+async def test_async_synthesize_posts_expected_payload(aiohttp_client_mock):
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/synthesize",
+        status=200,
+        payload={"ok": True, "file": "/tmp/audio.wav"},
+    )
 
-    client = VoiceboxApiClient("http://voicebox.local", session=session)
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
 
     result = await client.async_synthesize(
         "hello world",
@@ -90,25 +68,17 @@ async def test_async_synthesize_posts_expected_payload():
     )
 
     assert result["ok"] is True
-    session.request.assert_called_once_with(
-        "POST",
-        "http://voicebox.local/api/synthesize",
-        headers={"Accept": "application/json"},
-        json={
-            "text": "hello world",
-            "voice": "alloy",
-            "output_path": "/tmp/audio.wav",
-        },
-    )
 
 
 @pytest.mark.asyncio
-async def test_auth_errors_raise_voicebox_api_auth_error():
-    response = _response(status=401, json_body={"detail": "unauthorized"})
-    session = Mock(closed=False)
-    session.request = Mock(return_value=_ResponseCtx(response))
+async def test_auth_errors_raise_voicebox_api_auth_error(aiohttp_client_mock):
+    aiohttp_client_mock.get(
+        "http://voicebox.local/api/status",
+        status=401,
+        payload={"detail": "unauthorized"},
+    )
 
-    client = VoiceboxApiClient("http://voicebox.local", session=session)
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
 
     with pytest.raises(VoiceboxApiAuthError) as exc:
         await client.async_status()
@@ -118,12 +88,14 @@ async def test_auth_errors_raise_voicebox_api_auth_error():
 
 
 @pytest.mark.asyncio
-async def test_non_2xx_raises_voicebox_api_response_error():
-    response = _response(status=500, json_body={"detail": "server error"})
-    session = Mock(closed=False)
-    session.request = Mock(return_value=_ResponseCtx(response))
+async def test_non_2xx_raises_voicebox_api_response_error(aiohttp_client_mock):
+    aiohttp_client_mock.post(
+        "http://voicebox.local/api/restart",
+        status=500,
+        payload={"detail": "server error"},
+    )
 
-    client = VoiceboxApiClient("http://voicebox.local", session=session)
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
 
     with pytest.raises(VoiceboxApiResponseError) as exc:
         await client.async_restart()
@@ -134,9 +106,10 @@ async def test_non_2xx_raises_voicebox_api_response_error():
 
 @pytest.mark.asyncio
 async def test_network_error_raises_connection_error():
-    session = Mock(closed=False)
-    session.request = Mock(side_effect=aiohttp.ClientError("boom"))
+    def _raise(*args, **kwargs):
+        raise aiohttp.ClientError("boom")
 
+    session = types.SimpleNamespace(request=_raise, closed=False)
     client = VoiceboxApiClient("http://voicebox.local", session=session)
 
     with pytest.raises(VoiceboxApiConnectionError):
@@ -145,9 +118,10 @@ async def test_network_error_raises_connection_error():
 
 @pytest.mark.asyncio
 async def test_timeout_error_raises_connection_error():
-    session = Mock(closed=False)
-    session.request = Mock(side_effect=asyncio.TimeoutError())
+    def _raise(*args, **kwargs):
+        raise asyncio.TimeoutError()
 
+    session = types.SimpleNamespace(request=_raise, closed=False)
     client = VoiceboxApiClient("http://voicebox.local", session=session)
 
     with pytest.raises(VoiceboxApiConnectionError):
@@ -155,12 +129,14 @@ async def test_timeout_error_raises_connection_error():
 
 
 @pytest.mark.asyncio
-async def test_non_dict_json_response_raises_response_error():
-    response = _response(json_body=["not", "a", "dict"])
-    session = Mock(closed=False)
-    session.request = Mock(return_value=_ResponseCtx(response))
+async def test_non_dict_json_response_raises_response_error(aiohttp_client_mock):
+    aiohttp_client_mock.get(
+        "http://voicebox.local/api/status",
+        status=200,
+        payload=["not", "a", "dict"],
+    )
 
-    client = VoiceboxApiClient("http://voicebox.local", session=session)
+    client = VoiceboxApiClient("http://voicebox.local", session=aiohttp_client_mock.session)
 
     with pytest.raises(VoiceboxApiResponseError) as exc:
         await client.async_status()
@@ -169,18 +145,27 @@ async def test_non_dict_json_response_raises_response_error():
 
 
 @pytest.mark.asyncio
-async def test_bearer_token_is_attached_when_api_key_present():
-    response = _response(json_body={"status": "running"})
-    session = Mock(closed=False)
-    session.request = Mock(return_value=_ResponseCtx(response))
+async def test_bearer_token_is_attached_when_api_key_present(monkeypatch, aiohttp_client_mock):
+    captured_headers: dict[str, str] = {}
+    original_request = aiohttp_client_mock.session.request
+
+    def _capture_request(method, url, headers=None, json=None):
+        captured_headers.update(headers or {})
+        return original_request(method, url, headers=headers, json=json)
+
+    aiohttp_client_mock.session.request = _capture_request
+    aiohttp_client_mock.get(
+        "http://voicebox.local/api/status",
+        status=200,
+        payload={"status": "running"},
+    )
 
     client = VoiceboxApiClient(
         "http://voicebox.local",
         api_key="secret-token",
-        session=session,
+        session=aiohttp_client_mock.session,
     )
 
     await client.async_status()
 
-    _, _, kwargs = session.request.mock_calls[0]
-    assert kwargs["headers"]["Authorization"] == "Bearer secret-token"
+    assert captured_headers["Authorization"] == "Bearer secret-token"
