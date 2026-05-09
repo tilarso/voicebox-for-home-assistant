@@ -1,0 +1,83 @@
+name: Bug report
+description: Report a reproducible problem or regression
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug. Please provide enough detail so we can reproduce it quickly.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-line description of the problem
+      placeholder: Voicebox integration fails to load after restart
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, including config values where relevant
+      placeholder: |
+        1. Go to Settings then Devices and Services
+        2. Add Voicebox integration
+        3. Restart Home Assistant
+        4. Observe error
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Integration should load and expose entities and services.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Integration enters retry state and logs connection error.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste stack traces or log lines from Home Assistant logs
+      render: shell
+
+  - type: input
+    id: integration_version
+    attributes:
+      label: Integration version
+      placeholder: v0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.5.x
+    validations:
+      required: true
+
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Critical (data loss or security)
+        - High (core functionality blocked)
+        - Medium (workaround exists)
+        - Low (minor issue)
+    validations:
+      required: true
