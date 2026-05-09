@@ -16,7 +16,13 @@ synthesize:
         text:
     output_path:
       name: Output path
-      description: Optional file path where Voicebox should write audio output.
+      description: Optional file path where Voicebox should write audio output. Must remain under /config/media/voicebox.
+      required: false
+      selector:
+        text:
+    entry_id:
+      name: Entry ID
+      description: Optional Voicebox config entry id. Required when multiple Voicebox instances are configured.
       required: false
       selector:
         text:

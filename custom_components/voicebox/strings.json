@@ -3,16 +3,19 @@
     "step": {
       "user": {
         "title": "Connect to Voicebox",
-        "description": "Enter host and port for your Voicebox API",
+        "description": "Enter host, port, and optional API key for your Voicebox API",
         "data": {
           "host": "Host",
-          "port": "Port"
+          "port": "Port",
+          "api_key": "API key (optional)",
+          "use_ssl": "Use HTTPS"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect",
       "invalid_response": "Unexpected API response",
+      "invalid_host": "Host is invalid or not allowed",
       "unknown": "Unexpected error"
     },
     "abort": {

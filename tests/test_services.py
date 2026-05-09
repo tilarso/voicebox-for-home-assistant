@@ -6,6 +6,7 @@ import pytest
 
 from custom_components.voicebox import async_setup_entry, async_unload_entry
 from custom_components.voicebox.const import (
+    ATTR_ENTRY_ID,
     ATTR_OUTPUT_PATH,
     ATTR_TEXT,
     ATTR_VOICE,
@@ -17,10 +18,6 @@ from custom_components.voicebox.const import (
 @pytest.fixture(autouse=True)
 def _install_stubs(monkeypatch):
     homeassistant = types.ModuleType("homeassistant")
-
-    const_mod = types.ModuleType("homeassistant.const")
-    const_mod.CONF_HOST = "host"
-    const_mod.CONF_PORT = "port"
 
     core_mod = types.ModuleType("homeassistant.core")
 
@@ -42,7 +39,6 @@ def _install_stubs(monkeypatch):
     aiohttp_client_mod.async_get_clientsession = lambda hass: object()
 
     monkeypatch.setitem(sys.modules, "homeassistant", homeassistant)
-    monkeypatch.setitem(sys.modules, "homeassistant.const", const_mod)
     monkeypatch.setitem(sys.modules, "homeassistant.core", core_mod)
     monkeypatch.setitem(sys.modules, "homeassistant.exceptions", exceptions_mod)
     monkeypatch.setitem(sys.modules, "homeassistant.helpers", helpers_mod)
@@ -140,9 +136,9 @@ class _FakeHass:
 
 
 class _FakeEntry:
-    def __init__(self) -> None:
-        self.entry_id = "entry-1"
-        self.data = {"host": "127.0.0.1", "port": 8000}
+    def __init__(self, entry_id: str, host: str = "127.0.0.1", port: int = 8000) -> None:
+        self.entry_id = entry_id
+        self.data = {"host": host, "port": port, "use_ssl": False, "api_key": "key"}
         self.runtime_data = None
 
 
@@ -154,7 +150,7 @@ class _FakeServiceCall:
 @pytest.mark.asyncio
 async def test_setup_registers_synthesize_service():
     hass = _FakeHass()
-    entry = _FakeEntry()
+    entry = _FakeEntry("entry-1")
 
     ok = await async_setup_entry(hass, entry)
 
@@ -164,34 +160,65 @@ async def test_setup_registers_synthesize_service():
 
 
 @pytest.mark.asyncio
-async def test_synthesize_service_passes_payload_to_client():
+async def test_synthesize_service_passes_payload_to_selected_entry():
     hass = _FakeHass()
-    entry = _FakeEntry()
+    entry_one = _FakeEntry("entry-1", host="voicebox1.local")
+    entry_two = _FakeEntry("entry-2", host="voicebox2.local")
 
-    await async_setup_entry(hass, entry)
+    await async_setup_entry(hass, entry_one)
+    await async_setup_entry(hass, entry_two)
 
     handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
     call = _FakeServiceCall(
         {
             ATTR_TEXT: "Hello from test",
             ATTR_VOICE: "alloy",
-            ATTR_OUTPUT_PATH: "/tmp/voice.wav",
+            ATTR_OUTPUT_PATH: "/config/media/voicebox/audio.wav",
+            ATTR_ENTRY_ID: "entry-2",
         }
     )
 
     await handler(call)
 
-    entry.runtime_data.client.async_synthesize.assert_awaited_once_with(
+    entry_one.runtime_data.client.async_synthesize.assert_not_called()
+    entry_two.runtime_data.client.async_synthesize.assert_awaited_once_with(
         text="Hello from test",
         voice="alloy",
-        output_path="/tmp/voice.wav",
+        output_path="/config/media/voicebox/audio.wav",
     )
+
+
+@pytest.mark.asyncio
+async def test_synthesize_with_multiple_entries_requires_entry_id():
+    hass = _FakeHass()
+    entry_one = _FakeEntry("entry-1")
+    entry_two = _FakeEntry("entry-2")
+
+    await async_setup_entry(hass, entry_one)
+    await async_setup_entry(hass, entry_two)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    with pytest.raises(Exception, match="Multiple Voicebox instances are configured"):
+        await handler(_FakeServiceCall({ATTR_TEXT: "hello"}))
+
+
+@pytest.mark.asyncio
+async def test_synthesize_rejects_output_path_outside_allowlist():
+    hass = _FakeHass()
+    entry = _FakeEntry("entry-1")
+    await async_setup_entry(hass, entry)
+
+    handler = hass.services.get_handler(DOMAIN, SERVICE_SYNTHESIZE)
+
+    with pytest.raises(Exception, match="must stay inside /config/media/voicebox"):
+        await handler(_FakeServiceCall({ATTR_TEXT: "hello", ATTR_OUTPUT_PATH: "/etc/passwd"}))
 
 
 @pytest.mark.asyncio
 async def test_unload_removes_service_when_last_entry():
     hass = _FakeHass()
-    entry = _FakeEntry()
+    entry = _FakeEntry("entry-1")
 
     await async_setup_entry(hass, entry)
     assert hass.services.has_service(DOMAIN, SERVICE_SYNTHESIZE)

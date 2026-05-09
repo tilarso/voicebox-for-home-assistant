@@ -7,10 +7,14 @@ DOMAIN = "voicebox"
 CONF_HOST = "host"
 CONF_PORT = "port"
 CONF_API_KEY = "api_key"
+CONF_USE_SSL = "use_ssl"
+ATTR_ENTRY_ID = "entry_id"
 
 DEFAULT_PORT = 8000
 DEFAULT_TIMEOUT = 10
 DEFAULT_STATUS = "unknown"
+DEFAULT_USE_SSL = False
+SAFE_OUTPUT_BASE_DIR = "/config/media/voicebox"
 
 SERVICE_SYNTHESIZE = "synthesize"
 ATTR_TEXT = "text"
