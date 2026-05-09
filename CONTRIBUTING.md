@@ -39,7 +39,7 @@ This repository does not currently include a pinned lockfile/requirements file. 
 
 ```bash
 git clone https://github.com/tilarso/voicebox-for-home-assistant.git
-cd home-assistant-voicebox-plugin
+cd voicebox-for-home-assistant
 
 python3 -m venv .venv
 source .venv/bin/activate

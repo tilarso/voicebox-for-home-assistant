@@ -63,7 +63,7 @@ We ask that reporters refrain from publicly disclosing vulnerability details unt
 
 This integration is designed with the following security considerations:
 
-- **HTTPS by default.** All communication with the Voicebox API uses HTTPS. Plain HTTP is explicitly blocked to prevent API key exposure in transit.
+- **Configurable transport security.** The integration supports HTTPS when `use_ssl` is enabled, but `use_ssl` currently defaults to `false`. If left at default, communication uses HTTP. Enable HTTPS to protect API keys and synthesized content in transit.
 - **No credential logging.** API keys and tokens are never written to logs or diagnostic output.
 - **Input validation.** User-supplied paths and parameters are validated to prevent path traversal and injection attacks.
 - **Least privilege.** The integration requests only the Home Assistant permissions it needs to function.
