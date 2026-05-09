@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest an enhancement for the Voicebox integration
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Clear problem statements help us prioritize.
+
+  - type: input
+    id: summary
+    attributes:
+      label: Feature summary
+      description: One-line description of the feature
+      placeholder: Add per-entity voice selection overrides
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What are you trying to do? What pain point exists today?
+      placeholder: |
+        I manage multiple zones and need different voices per room.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior, API, or UI you want
+      placeholder: |
+        Add an options-flow field for default voice and an optional service parameter override.
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds or alternate approaches?
+      placeholder: Using automation templates, but it is brittle.
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Breaking change?
+      options:
+        - No
+        - Maybe
+        - Yes
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Links, screenshots, references
